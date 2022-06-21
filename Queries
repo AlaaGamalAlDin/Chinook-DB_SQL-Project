@@ -1,0 +1,112 @@
+Query 1 
+
+WITH T1 AS
+  (SELECT Customer.Country,
+          SUM(Invoice.Total) AS Total_SUM
+   FROM Customer
+   JOIN Invoice ON Customer.CustomerId=Invoice.CustomerId
+   GROUP BY 1
+   ORDER BY 2 DESC
+   LIMIT 1)
+SELECT T1.Country,
+       Track.Name,
+       round(SUM(InvoiceLine.UnitPrice*InvoiceLine.Quantity)) AS Earnings
+FROM Track
+JOIN InvoiceLine ON Track.TrackId=InvoiceLine.TrackId
+JOIN Invoice ON Invoice.InvoiceId = InvoiceLine.InvoiceId
+JOIN Customer ON Customer.CustomerId = Invoice.CustomerId
+JOIN T1 ON T1.Country = Customer.Country
+WHERE T1.Country IN
+    (SELECT T1.Country
+     FROM T1)
+GROUP BY 1,
+         2
+ORDER BY 3 DESC
+LIMIT 10;
+-------------------------------------------------------------------------------------
+Query 2
+
+WITH T1 AS
+  (SELECT DISTINCT Track.TrackId,
+                   Name,
+                   CASE
+                       WHEN milliseconds < 180000 THEN 'Short'
+                       WHEN milliseconds >= 180000
+                            AND milliseconds<300000 THEN 'Medium'
+                       ELSE 'Long'
+                   END LENGTH
+   FROM Track),
+     T2 AS
+  (SELECT Track.Name,
+          Track.TrackId,
+          sum(InvoiceLine.UnitPrice*InvoiceLine.Quantity) AS Total_Sales
+   FROM Track
+   JOIN InvoiceLine ON InvoiceLine.TrackId=Track.TrackId
+   GROUP BY 1,
+            2)
+SELECT T1.length,
+       round(SUM(T2.Total_Sales)) AS Total_Sales
+FROM T1
+JOIN T2 ON T1.TrackId=T2.TrackId
+GROUP BY 1
+-----------------------------------------------------------------------------------------------------------------
+
+Query 3
+
+WITH t1 AS
+  (SELECT Invoice.InvoiceId,
+          CASE
+              WHEN strftime('%m-%d', Invoice.InvoiceDate)>'03-21'
+                   AND strftime('%m-%d', Invoice.InvoiceDate)<'06-21' THEN 'Spring'
+              WHEN strftime('%m-%d', Invoice.InvoiceDate)>'06-21'
+                   AND strftime('%m-%d', Invoice.InvoiceDate)<'09-23' THEN 'Summer'
+              WHEN strftime('%m-%d', Invoice.InvoiceDate) >'09-23'
+                   AND strftime('%m-%d', Invoice.InvoiceDate)<'12-21' THEN 'Autumn'
+              ELSE 'Winter'
+          END Season
+   FROM Invoice),
+     t2 AS
+  (SELECT Genre.Name,
+          Invoice.InvoiceId,
+          InvoiceLine.UnitPrice,
+          InvoiceLine.Quantity
+   FROM Genre
+   JOIN Track ON Track.GenreId=Genre.GenreId
+   JOIN InvoiceLine ON Track.TrackId=InvoiceLine.TrackId
+   JOIN Invoice ON Invoice.InvoiceId=InvoiceLine.InvoiceId)
+SELECT t1.Season,
+       t2.Name,
+       SUM(t2.UnitPrice*t2.Quantity) AS Total_Sales
+FROM t2
+JOIN t1 ON t1.InvoiceId=t2.InvoiceId
+GROUP BY t1.Season,
+         t2.Name
+
+-------------------------------------------------------------------------------------------------------------------------
+
+Query 4
+
+WITH T1 AS
+  (SELECT Album.ArtistId,
+          Album.Title,
+          SUM(InvoiceLine.UnitPrice*InvoiceLine.Quantity) AS Album_Salse
+   FROM Album
+   JOIN Track ON Track.AlbumId=Album.AlbumId
+   JOIN InvoiceLine ON InvoiceLine.TrackId=Track.TrackId
+   GROUP BY 1,
+            2),
+     T2 AS
+  (SELECT T1.Title,
+          T1.Album_Salse,
+          T1.ArtistId
+   FROM T1
+   WHERE Album_Salse >
+       (SELECT avg(Album_Salse)
+        FROM T1))
+SELECT Artist.Name,
+       COUNT(T2.Title) AS Total_Albums
+FROM Artist
+JOIN T2 ON T2.ArtistId=Artist.ArtistId
+GROUP BY 1
+ORDER BY 2 DESC
+LIMIT 10
